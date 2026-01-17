@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
 
 # --- CONFIGURATION ---
-CSV_PATH = r"E:\[TOOLS]\Web-Monitoring\log-hw\1.CSV"
+LOG_DIR = "log-here"
 INTERVAL = 1.5  # Seconds between reads
 
 app = FastAPI()
@@ -38,11 +38,33 @@ def find_idx(headers, keyword_sets):
             if all(k in h for k in keywords): return i
     return -1
 
+def find_latest_csv(log_dir):
+    if not os.path.exists(log_dir):
+        return None
+
+    csv_files = [
+        os.path.join(log_dir, f)
+        for f in os.listdir(log_dir)
+        if f.lower().endswith(".csv")
+    ]
+
+    if not csv_files:
+        return None
+
+    # Pick the most recently modified CSV
+    return max(csv_files, key=os.path.getmtime)
+
 # --- THE 0% CPU MONITOR ---
 def monitor_persistent():
-    print(f"--- WAITING FOR FILE: {CSV_PATH} ---")
-    while not os.path.exists(CSV_PATH):
+    print(f"--- WAITING FOR CSV FILE IN: {LOG_DIR} ---")
+    CSV_PATH = None
+
+    while CSV_PATH is None:
+        CSV_PATH = find_latest_csv(LOG_DIR)
         time.sleep(2)
+
+    print(f"--- USING LOG FILE: {CSV_PATH} ---")
+
 
     # 1. READ HEADERS (Open -> Read -> Close)
     # We do this only ONCE at startup.

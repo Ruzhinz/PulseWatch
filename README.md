@@ -7,7 +7,7 @@
 ## 🚀 Features
 
 - 📊 Live CPU, GPU, and RAM monitoring  
-- 📄 Reads data directly from CSV log files (HWiNFO)[https://www.hwinfo.com]
+- 📄 Reads data directly from CSV log files [HWiNFO](https://www.hwinfo.com)
 - ⚡ Light weight  
 - 🌐 Web dashboard support  
 - 🔌 JSON API endpoint for external integrations  
@@ -95,13 +95,23 @@ Dependencies
 pip install fastapi uvicorn
 ```
 
-▶️ How to Run
+## ▶️ How to Run
+
+1. Open **HWiNFO**
+2. Click **Start Logging**
+3. Set the log output location to your repository folder, for example:
+```
+PulseWatch/log-here/log.csv
+```
+
+4. Open a terminal in the PulseWatch repository
+5. Start the server:
 ```
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-Open in browser:
 
+6. Open in browser:
 Web UI:
 ```
 http://localhost:8000
