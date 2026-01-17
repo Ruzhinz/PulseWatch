@@ -8,72 +8,53 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
 
 # --- CONFIGURATION ---
+# Use "." if the log file is in the same folder as this script
 LOG_DIR = "log-here" 
-INTERVAL = 1.5
+INTERVAL = 1.5  # Seconds between reads
 
 app = FastAPI()
+# Create static folder if missing
 if not os.path.exists("static"): os.makedirs("static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # --- GLOBAL STATE ---
 latest_stats = {
     "cpu": { "usage": 0, "clock": 0, "power": 0, "temp": 0 },
-    "gpu": { "usage": 0, "clock": 0, "power": 0, "temp": 0, "vram_gb": 0, "vram_pct": 0 },
+    "gpu": { "usage": 0, "clock": 0, "power": 0, "temp": 0 },
     "ram": { "usage_percent": 0, "used_gb": 0, "total_gb": 0 },
     "info": { "cpu_name": "Detecting...", "gpu_name": "Detecting...", "ram_type": "DDR-UNK" },
     "raw": { "status": "Starting..." }
 }
 
-# --- 1. HARDWARE DETECTION (Name + Total VRAM) ---
-def get_hw_info():
+# --- NEW FUNCTION: DETECT HW NAMES (Run once at start) ---
+def get_hardware_names_wmic():
     c_name, g_name = "Generic CPU", "Generic GPU"
-    total_vram_gb = 0.0
-
     try:
         if platform.system() == "Windows":
-            # 1. CPU Name
+            # CPU
             cmd = "wmic cpu get name"
             out = subprocess.check_output(cmd, shell=True).decode().strip().split('\n')
             if len(out) > 1: c_name = out[1].strip()
             
-            # 2. GPU Name
+            # GPU
             cmd = "wmic path win32_VideoController get name"
             out = subprocess.check_output(cmd, shell=True).decode().strip().split('\n')
             gpus = [x.strip() for x in out[1:] if x.strip()]
-            if gpus: 
-                priority = ["NVIDIA", "Radeon", "RTX", "GTX", "Arc", "RX"]
-                selected = gpus[0]
-                for g in gpus:
-                    for p in priority:
-                        if p.lower() in g.lower():
-                            selected = g
-                            break
-                g_name = selected
-
-            # 3. Total VRAM
-            ps_cmd = ["powershell", "-Command", "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty AdapterRAM"]
-            ps_out = subprocess.check_output(ps_cmd, creationflags=0x08000000, stderr=subprocess.DEVNULL).decode().strip()
-            
-            vram_values = [int(line.strip()) for line in ps_out.split('\n') if line.strip().isdigit()]
-            if vram_values:
-                max_bytes = max(vram_values)
-                total_vram_gb = max_bytes / (1024**3)
-
+            if gpus: g_name = gpus[0]
     except Exception as e:
-        print(f"HW Detect Error: {e}")
-
-    return c_name, g_name, total_vram_gb
+        print(f"Name Detect Error: {e}")
+    return c_name, g_name
 
 # --- PARSING HELPERS ---
 def safe_float(v):
-    if not v: return 0.0
+    if not v: return None
     try:
         s = str(v).replace("MHz", "").replace("%", "").replace("°C", "").replace("W", "").strip()
         if "," in s and "." not in s: s = s.replace(",", ".")
         elif "," in s and "." in s:   s = s.replace(",", "")
         return float(s)
     except:
-        return 0.0
+        return None
 
 def find_idx(headers, keyword_sets):
     headers_lower = [h.lower() for h in headers]
@@ -88,34 +69,24 @@ def find_latest_csv(log_dir):
     if not csv_files: return None
     return max(csv_files, key=os.path.getmtime)
 
-# --- THE MONITOR LOOP ---
+# --- THE 0% CPU MONITOR (With your logic) ---
 def monitor_persistent():
-    # 1. Run Detection
-    c_name, g_name, total_vram = get_hw_info()
-    
-    # --- FIX APPLIED HERE ---
-    # Since you confirmed 16GB, we ensure the variable reflects that.
-    # We check if detected is less than 12GB (to avoid accidental iGPU detection of 4GB/8GB shared)
-    if total_vram < 12.0: 
-        print(f"Correction: Auto-detected {total_vram:.2f}GB VRAM, forcing 16.0GB based on config.")
-        total_vram = 16.0 
-
+    # 1. Detect Names (Outside the loop, 0 cost)
+    c_name, g_name = get_hardware_names_wmic()
     latest_stats["info"]["cpu_name"] = c_name
     latest_stats["info"]["gpu_name"] = g_name
-    
     print(f"--- HARDWARE: {c_name} | {g_name} ---")
-    print(f"--- DETECTED VRAM CAPACITY: {total_vram:.2f} GB ---")
 
-    print(f"--- WAITING FOR LOGS IN: {os.path.abspath(LOG_DIR)} ---")
+    print(f"--- WAITING FOR CSV FILE IN: {os.path.abspath(LOG_DIR)} ---")
     CSV_PATH = None
 
     while CSV_PATH is None:
         CSV_PATH = find_latest_csv(LOG_DIR)
         time.sleep(2)
 
-    print(f"--- USING LOG: {CSV_PATH} ---")
+    print(f"--- USING LOG FILE: {CSV_PATH} ---")
 
-    # 2. READ HEADERS
+    # 2. READ HEADERS (Open -> Read -> Close)
     headers = []
     delimiter = ","
     try:
@@ -128,7 +99,7 @@ def monitor_persistent():
         print(f"Header Error: {e}")
         return
 
-    # 3. MAP COLUMNS
+    # 3. MAP COLUMNS (Added 'ram_spd' to your list)
     idx = {
         'cpu_use': find_idx(headers, [["total", "cpu", "usage"], ["cpu", "total"], ["cpu", "usage"]]),
         'cpu_tmp': find_idx(headers, [["cpu", "tctl"], ["cpu", "package"], ["core", "max"], ["cpu", "temp"]]),
@@ -140,46 +111,41 @@ def monitor_persistent():
         'gpu_clk': find_idx(headers, [["gpu", "clock"], ["gpu", "core", "clock"]]),
         'gpu_pwr': find_idx(headers, [["gpu", "power"], ["gpu", "ppt"]]),
         
-        # --- FIX APPLIED HERE ---
-        # Refined priority: "allocated" and "dedicated" are checked first.
-        # "usage" is last because it often refers to % load, not MB.
-        'gpu_vram_mb': find_idx(headers, [
-            ["d3d", "dedicated"], 
-            ["gpu", "memory", "dedicated"], 
-            ["gpu", "memory", "allocated"], 
-            ["gpu", "memory", "usage"] 
-        ]),
-        
         'ram_load': find_idx(headers, [["physical", "memory", "load"], ["memory", "usage"]]),
         'ram_used': find_idx(headers, [["physical", "memory", "used"], ["memory", "used"]]),
-        'ram_spd':  find_idx(headers, [["memory", "clock"], ["dram", "frequency"]])
+        'ram_spd':  find_idx(headers, [["memory", "clock"], ["dram", "frequency"]]) # New
     }
 
-    # 4. FAST LOOP
+    # 4. FAST LOOP (Your exact logic)
     f = None
     while True:
         try:
+            # Open file if closed
             if f is None:
                 f = open(CSV_PATH, "rb")
                 f.seek(0, 2)
 
+            # SLEEP FIRST (Crucial for 0% CPU)
             time.sleep(INTERVAL)
 
+            # Check rotation
             try:
                 if os.fstat(f.fileno()).st_size < f.tell():
                     f.close(); f = None; continue
             except OSError:
                 f = None; continue
 
+            # TAIL LOGIC
             f.seek(0, 2)
             file_len = f.tell()
-            read_len = min(file_len, 4096)
+            read_len = min(file_len, 4096) # Read last 4kb
             f.seek(-read_len, 1)
 
             raw_block = f.read(read_len)
             text_block = raw_block.decode("utf-8", errors="ignore")
             lines = text_block.split('\n')
 
+            # Get valid last line
             line = ""
             if len(lines) > 1 and lines[-1].strip(): line = lines[-1]
             elif len(lines) > 2: line = lines[-2]
@@ -190,6 +156,7 @@ def monitor_persistent():
             if len(parts) < 3: continue
 
             # --- UPDATE GLOBALS ---
+            # Helper to reduce repetition
             def get_val(key):
                 i = idx.get(key, -1)
                 if i > -1 and i < len(parts): return safe_float(parts[i])
@@ -204,45 +171,23 @@ def monitor_persistent():
             latest_stats["gpu"]["temp"]  = get_val('gpu_tmp')
             latest_stats["gpu"]["clock"] = get_val('gpu_clk')
             latest_stats["gpu"]["power"] = get_val('gpu_pwr')
-            
-            # --- FIX APPLIED HERE ---
-            v_val = get_val('gpu_vram_mb')
 
-            # Heuristic check: If the CSV value is tiny (e.g., < 100) but represents usage, 
-            # it might be reading a percentage column by mistake (e.g. 91.0). 
-            # But since your usage is 3.2GB (3200MB), the CSV likely reads 3200.
-            
-            if v_val > 100: 
-                v_mb = v_val
-                # Convert to GB for display
-                latest_stats["gpu"]["vram_gb"] = v_mb / 1024
-            else:
-                # If value is < 100, it's likely GB or faulty percentage data. 
-                # Assuming it is GB if it matches mathematical expectation, but relying on MB is safer.
-                v_mb = v_val * 1024
-                latest_stats["gpu"]["vram_gb"] = v_val
-
-            # Force accurate percentage calculation based on the confirmed 16GB
-            if total_vram > 0:
-                # Ensure we are dividing MB by MB (16GB * 1024)
-                # v_mb is in MB. total_vram is in GB.
-                latest_stats["gpu"]["vram_pct"] = (v_mb / (total_vram * 1024)) * 100
-            else:
-                latest_stats["gpu"]["vram_pct"] = 0
-
-            # RAM
             r_load = get_val('ram_load')
             r_used = get_val('ram_used')
+            
             latest_stats["ram"]["usage_percent"] = r_load
+            
+            # HWiNFO sometimes gives MB, sometimes GB
             if r_used > 512: r_used /= 1024 
             latest_stats["ram"]["used_gb"] = r_used
+            
             if r_used and r_load:
                 latest_stats["ram"]["total_gb"] = r_used / (r_load / 100.0)
 
-            # RAM Type
+            # NEW: RAM Speed/DDR Calc
             r_clk = get_val('ram_spd')
             if r_clk > 0:
-                mt = int(r_clk * 2)
+                mt = int(r_clk * 2) # DDR = Double Rate
                 ddr = "DDR5" if mt > 4600 else "DDR4"
                 latest_stats["info"]["ram_type"] = f"{ddr}-{mt}"
 
@@ -263,7 +208,9 @@ def start():
     t.start()
 
 @app.get("/stats")
-def get_stats(): return JSONResponse(latest_stats)
+def get_stats():
+    return JSONResponse(latest_stats)
 
 @app.get("/")
-def index(): return FileResponse("static/index.html")
+def index():
+    return FileResponse("static/index.html")

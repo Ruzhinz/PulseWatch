@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NETRUNNER // V4</title>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root { --bg:#020406; --panel:#080b12; --cyan:#00f3ff; --pink:#ff003c; --yellow:#fcee0a; --dim:#46586d; }
+    body { background:var(--bg); color:#e0f2ff; font-family:'Chakra Petch',sans-serif; margin:0; padding:20px; 
+           background-image: linear-gradient(rgba(0,243,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,243,255,0.03) 1px, transparent 1px); background-size:30px 30px;}
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:20px; }
+    .card { background:var(--panel); border:1px solid #1a2333; padding:20px; position:relative; display:flex; flex-direction:column; }
+    .card::before { content:''; position:absolute; top:0; right:0; border-width:0 20px 20px 0; border-style:solid; border-color:transparent #1a2333 transparent transparent; }
+    .head { display:flex; justify-content:space-between; color:var(--dim); font-size:12px; margin-bottom:10px; letter-spacing:1px; text-transform:uppercase; }
+    .big { font-family:'JetBrains Mono'; font-size:46px; font-weight:700; margin:5px 0 15px; }
+    .chart { height:90px; width:100%; margin-top:auto; }
+    .rows { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; border-top:1px solid #1a2333; padding-top:15px; margin-top:15px; }
+    .row span { display:block; }
+    .row span:first-child { font-size:10px; color:var(--dim); }
+    .row span:last-child { font-family:'JetBrains Mono'; font-size:13px; margin-top:2px;}
+    .c-cpu .big { color:var(--cyan); text-shadow:0 0 15px rgba(0,243,255,0.2); }
+    .c-gpu .big { color:var(--pink); text-shadow:0 0 15px rgba(255,0,60,0.2); }
+    .c-ram .big { color:var(--yellow); text-shadow:0 0 15px rgba(252,238,10,0.2); }
+    .bar-bg { width:100%; height:6px; background:#111; margin:20px 0; }
+    .bar { height:100%; background:var(--yellow); width:0%; box-shadow:0 0 10px var(--yellow); transition:width 0.3s; }
+  </style>
+</head>
+<body>
+  <div style="margin-bottom:20px; border-bottom:1px solid #1a2333; padding-bottom:15px; display:flex; justify-content:space-between;">
+    <h1 style="margin:0; font-size:22px; color:var(--cyan); letter-spacing:2px;">SYSTEM // MONITOR</h1>
+    <div style="font-family:'JetBrains Mono'; font-size:12px; display:flex; align-items:center; gap:10px;">
+       STATUS: <span id="st" style="color:var(--pink)">INIT</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card c-cpu">
+      <div class="head"><span>Processing</span><span style="color:#fff; font-weight:700" id="n_cpu">--</span></div>
+      <div class="big" id="v_cpu">--%</div>
+      <div class="chart"><canvas id="gCpu"></canvas></div>
+      <div class="rows">
+        <div class="row"><span>CLOCK</span><span id="d_c_clk">--</span></div>
+        <div class="row"><span>POWER</span><span id="d_c_pwr">--</span></div>
+        <div class="row"><span>TEMP</span><span id="d_c_tmp">--</span></div>
+      </div>
+    </div>
+
+    <div class="card c-gpu">
+      <div class="head"><span>Graphics</span><span style="color:#fff; font-weight:700" id="n_gpu">--</span></div>
+      <div class="big" id="v_gpu">--%</div>
+      <div class="chart"><canvas id="gGpu"></canvas></div>
+      <div class="rows">
+        <div class="row"><span>CLOCK</span><span id="d_g_clk">--</span></div>
+        <div class="row"><span>POWER</span><span id="d_g_pwr">--</span></div>
+        <div class="row"><span>TEMP</span><span id="d_g_tmp">--</span></div>
+      </div>
+    </div>
+
+    <div class="card c-ram">
+      <div class="head"><span>Memory</span><span style="color:#fff; font-weight:700" id="n_ram">SYSTEM RAM</span></div>
+      <div class="big" id="v_ram">--%</div>
+      <div class="bar-bg"><div class="bar" id="b_ram"></div></div>
+      <div class="rows">
+        <div class="row"><span>USED</span><span id="d_r_usd">--</span></div>
+        <div class="row"><span>TOTAL</span><span id="d_r_tot">--</span></div>
+        <div class="row"><span>TYPE</span><span id="d_r_typ">--</span></div>
+      </div>
+    </div>
+  </div>
+  
+  <div style="margin-top:20px; font-family:'JetBrains Mono'; font-size:10px; color:#333; background:#000; padding:10px; border:1px solid #111;">
+    LOG > <span id="raw_log">Waiting for stream...</span>
+  </div>
+
+<script>
+const mkChart = (id, color) => new Chart(document.getElementById(id), {
+  type:'line', options:{ responsive:true, maintainAspectRatio:false, animation:false, plugins:{legend:{display:false}}, scales:{x:{display:false}, y:{display:false, min:0, max:100}}, elements:{line:{tension:0.3, borderWidth:2, borderColor:color}, point:{radius:0}, area:{backgroundColor:color+'1A', fill:true}} },
+  data:{ labels:Array(30).fill(''), datasets:[{data:Array(30).fill(0), borderColor:color, backgroundColor:color+'1A', fill:true}] }
+});
+const cCpu = mkChart('gCpu','#00f3ff');
+const cGpu = mkChart('gGpu','#ff003c');
+
+const up = (id, txt) => document.getElementById(id).textContent = txt;
+
+async function tick(){
+  try {
+    const r = await fetch("/stats");
+    const d = await r.json();
+    
+    // Status
+    const s = d.raw.status;
+    up("st", s);
+    up("raw_log", s);
+    document.getElementById("st").style.color = (s==="LIVE") ? "#0f0" : "#f0f";
+
+    // CPU
+    up("n_cpu", d.info.cpu_name);
+    up("v_cpu", d.cpu.usage + "%");
+    up("d_c_clk", parseInt(d.cpu.clock)+" MHz");
+    up("d_c_pwr", d.cpu.power.toFixed(1)+" W");
+    up("d_c_tmp", d.cpu.temp+" °C");
+    cCpu.data.datasets[0].data.push(d.cpu.usage); cCpu.data.datasets[0].data.shift(); cCpu.update();
+
+    // GPU
+    up("n_gpu", d.info.gpu_name);
+    up("v_gpu", d.gpu.usage + "%");
+    up("d_g_clk", parseInt(d.gpu.clock)+" MHz");
+    up("d_g_pwr", d.gpu.power.toFixed(1)+" W");
+    up("d_g_tmp", d.gpu.temp+" °C");
+    cGpu.data.datasets[0].data.push(d.gpu.usage); cGpu.data.datasets[0].data.shift(); cGpu.update();
+
+    // RAM
+    up("v_ram", d.ram.usage_percent + "%");
+    up("d_r_usd", d.ram.used_gb.toFixed(1) + " GB");
+    up("d_r_tot", d.ram.total_gb.toFixed(1) + " GB");
+    up("d_r_typ", d.info.ram_type);
+    document.getElementById("b_ram").style.width = d.ram.usage_percent + "%";
+
+  } catch(e){ up("st", "OFFLINE"); }
+  setTimeout(tick, 1000);
+}
+tick();
+</script>
+</body>
+</html>

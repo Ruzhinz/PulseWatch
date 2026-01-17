@@ -73,16 +73,7 @@ Edit these values in `main.py`:
 LOG_DIR = "log-here"
 INTERVAL = 1.5  # seconds
 ```
-
-## ⚙️ Configuration
-
-Edit these values in `main.py`:
-
-```python
-LOG_DIR = "log-here"
-INTERVAL = 1.5  # seconds
-```
-PulseWatch read the log-here/ directory and automatically uses any CSV log file found inside it.
+PulseWatch read the log-here/ directory and *automatically* uses any CSV log file found inside it.
 
 - The app waits until a CSV file appears
 - If multiple CSV files exist, the newest one is used
