@@ -1,2 +1,148 @@
 # PulseWatch
-PulseWatch is a lightweight web app that reads hardware monitoring data from a CSV file and shows live CPU, GPU, and RAM statistics through a web page and JSON API.
+
+**PulseWatch** is a real-time hardware monitoring web app that reads system statistics from a continuously updated CSV log file and serves live CPU, GPU, and RAM data via a FastAPI backend and web interface.
+
+---
+
+## 🚀 Features
+
+- 📊 Live CPU, GPU, and RAM monitoring  
+- 📄 Reads data directly from CSV log files (e.g. HWiNFO)  
+- ⚡ Light weight  
+- 🌐 Web dashboard support  
+- 🔌 JSON API endpoint for external integrations  
+- 🔄 Automatically detects CSV delimiter (`,` or `;`)  
+- 🧠 Smart column detection (no hardcoded column index)  
+
+---
+
+## 🧱 Architecture Overview
+
+CSV Log File (HWiNFO)
+↓
+Persistent File Tail Reader (Thread)
+↓
+Global Shared State (latest_stats)
+↓
+FastAPI Server
+├── /stats → JSON API
+└── / → Web UI (static/index.html)
+
+---
+
+## 📁 Project Structure
+
+PulseWatch/
+│
+├── main.py
+├── static/
+│ └── index.html
+└── README.md
+
+
+---
+
+## 📊 Data Collected
+
+### CPU
+- Usage (%)
+- Clock speed (MHz)
+- Power consumption (W)
+- Temperature (°C)
+
+### GPU
+- Usage (%)
+- Clock speed (MHz)
+- Power consumption (W)
+- Temperature (°C)
+
+### RAM
+- Usage percentage (%)
+- Used memory (GB)
+- Total memory (GB, calculated)
+
+---
+
+## ⚙️ Configuration
+
+Edit these values in `main.py`:
+
+```python
+CSV_PATH = r"E:\[TOOLS]\Web-Monitoring\log-hw\1.CSV"
+INTERVAL = 1.5  # seconds
+
+Notes
+
+The app will wait until the CSV file exists
+
+Supports both , and ; CSV delimiters
+
+Handles log rotation and file truncation safely
+
+📦 Requirements
+Python
+
+Python 3.9+ recommended
+
+Dependencies
+
+```
+pip install fastapi uvicorn
+
+▶️ How to Run
+
+```
+uvicorn main:app --host 0.0.0.0 --port 8000
+
+
+Open in browser:
+
+Web UI:
+http://localhost:8000
+
+JSON API:
+http://localhost:8000/stats
+
+🔌 API Example Response
+
+```
+{
+  "cpu": {
+    "usage": 12.5,
+    "clock": 4200,
+    "power": 45.3,
+    "temp": 58
+  },
+  "gpu": {
+    "usage": 32,
+    "clock": 2500,
+    "power": 120,
+    "temp": 65
+  },
+  "ram": {
+    "usage_percent": 48,
+    "used_gb": 15.4,
+    "total_gb": 32
+  },
+  "raw": {
+    "status": "OK"
+  }
+}
+
+🧠 Design Decisions
+
+Persistent file handle to avoid CPU spikes
+
+Threaded monitor loop separated from FastAPI
+
+Heuristic column matching instead of fixed indexes
+
+Safe float parsing for mixed units (MHz, %, °C, W)
+
+⚠️ Limitations
+
+Requires an external tool to generate the CSV log
+
+Windows-oriented paths by default
+
+No authentication (local usage recommended)

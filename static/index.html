@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>HW Monitor</title>
+  <style>
+    body { font-family: system-ui, "Segoe UI", Roboto, Arial; background:#0f1724; color:#e6eef8; padding:12px; }
+    .card { background:#0b1220; border-radius:10px; padding:12px; margin-bottom:10px; box-shadow: 0 6px 18px rgba(0,0,0,0.6);}
+    h1 { font-size:20px; margin:0 0 8px;}
+    .big { font-size:28px; font-weight:600; }
+    .small { font-size:13px; color:#9aa7bf; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+    .full { grid-column: 1 / -1; }
+  </style>
+</head>
+<body>
+  <h1>Local HW Monitor</h1>
+  <div class="grid">
+    <div id="cpu" class="card">
+      <div class="small">CPU</div>
+      <div class="big" id="cpu_usage">--%</div>
+      <div class="small" id="cpu_more">Clock: -- MHz • Power: -- W • Temp: -- °C</div>
+    </div>
+
+    <div id="gpu" class="card">
+      <div class="small">GPU</div>
+      <div class="big" id="gpu_usage">--%</div>
+      <div class="small" id="gpu_more">Clock: -- MHz • Power: -- W • Temp: -- °C</div>
+    </div>
+
+    <div id="ram" class="card full">
+      <div class="small">RAM</div>
+      <div class="big" id="ram_usage">--%</div>
+      <div class="small" id="ram_more">Used: -- / -- GB</div>
+    </div>
+
+    <div class="card full">
+      <div class="small">Raw sample (latest)</div>
+      <pre id="raw" style="white-space:pre-wrap; font-size:12px; margin:6px 0; max-height:220px; overflow:auto;"></pre>
+    </div>
+  </div>
+
+<script>
+const refreshMs = 1500;
+async function fetchStats(){
+  try{
+    const r = await fetch("/stats");
+    const j = await r.json();
+    // CPU
+    const cpu = j.cpu || {};
+    document.getElementById("cpu_usage").textContent = cpu.usage !== null ? (Math.round(cpu.usage*10)/10 + "%") : "--%";
+    document.getElementById("cpu_more").textContent = `Clock: ${cpu.clock ?? '--'} MHz • Power: ${cpu.power ?? '--'} W • Temp: ${cpu.temp ?? '--'} °C`;
+
+    // GPU
+    const gpu = j.gpu || {};
+    document.getElementById("gpu_usage").textContent = gpu.usage !== null ? (Math.round(gpu.usage*10)/10 + "%") : "--%";
+    document.getElementById("gpu_more").textContent = `Clock: ${gpu.clock ?? '--'} MHz • Power: ${gpu.power ?? '--'} W • Temp: ${gpu.temp ?? '--'} °C`;
+
+    // RAM
+    const ram = j.ram || {};
+    document.getElementById("ram_usage").textContent = ram.usage_percent !== null ? (Math.round(ram.usage_percent*10)/10 + "%") : "--%";
+    const used = ram.used_gb ? (Math.round(ram.used_gb*10)/10) : '--';
+    const total = ram.total_gb ? (Math.round(ram.total_gb*10)/10) : '--';
+    document.getElementById("ram_more").textContent = `Used: ${used} / ${total} GB`;
+
+    // Raw
+    document.getElementById("raw").textContent = JSON.stringify(j.raw || {}, null, 2);
+  }catch(e){
+    console.error(e);
+  } finally {
+    setTimeout(fetchStats, refreshMs);
+  }
+}
+fetchStats();
+</script>
+</body>
+</html>
