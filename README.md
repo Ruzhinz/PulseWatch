@@ -70,17 +70,25 @@ PulseWatch/
 Edit these values in `main.py`:
 
 ```python
-CSV_PATH = r"E:\[TOOLS]\Web-Monitoring\log-hw\1.CSV"
+LOG_DIR = "log-here"
 INTERVAL = 1.5  # seconds
 ```
 
-Notes
+## ⚙️ Configuration
 
-The app will wait until the CSV file exists
+Edit these values in `main.py`:
 
-Supports both , and ; CSV delimiters
+```python
+LOG_DIR = "log-here"
+INTERVAL = 1.5  # seconds
+```
+PulseWatch read the log-here/ directory and automatically uses any CSV log file found inside it.
 
-Handles log rotation and file truncation safely
+- The app waits until a CSV file appears
+- If multiple CSV files exist, the newest one is used
+- No hard-coded file paths are required
+
+Supports both , and ; CSV delimiters and safely handles log rotation.
 
 ---
 
@@ -116,6 +124,11 @@ Web UI:
 ```
 http://localhost:8000
 ```
+Or on another device (PC's IP Address)
+```
+http://192.168.0.250:8000
+```
+
 JSON API:
 ```
 http://localhost:8000/stats
