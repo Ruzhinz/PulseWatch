@@ -70,6 +70,7 @@ Edit these values in `main.py`:
 ```python
 CSV_PATH = r"E:\[TOOLS]\Web-Monitoring\log-hw\1.CSV"
 INTERVAL = 1.5  # seconds
+```
 
 Notes
 
@@ -78,6 +79,8 @@ The app will wait until the CSV file exists
 Supports both , and ; CSV delimiters
 
 Handles log rotation and file truncation safely
+
+---
 
 📦 Requirements
 Python
@@ -88,20 +91,25 @@ Dependencies
 
 ```
 pip install fastapi uvicorn
+```
 
 ▶️ How to Run
-
 ```
 uvicorn main:app --host 0.0.0.0 --port 8000
-
+```
 
 Open in browser:
 
 Web UI:
+```
 http://localhost:8000
-
+```
 JSON API:
+```
 http://localhost:8000/stats
+```
+
+---
 
 🔌 API Example Response
 
@@ -128,7 +136,7 @@ http://localhost:8000/stats
     "status": "OK"
   }
 }
-
+```
 🧠 Design Decisions
 
 Persistent file handle to avoid CPU spikes
@@ -138,11 +146,3 @@ Threaded monitor loop separated from FastAPI
 Heuristic column matching instead of fixed indexes
 
 Safe float parsing for mixed units (MHz, %, °C, W)
-
-⚠️ Limitations
-
-Requires an external tool to generate the CSV log
-
-Windows-oriented paths by default
-
-No authentication (local usage recommended)
