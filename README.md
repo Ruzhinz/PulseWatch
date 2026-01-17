@@ -26,21 +26,21 @@ Persistent File Tail Reader (Thread)
 Global Shared State (latest_stats)
 ↓
 FastAPI Server
-|- /stats → JSON API
-  |- / → Web UI (static/index.html)
+├── /stats → JSON API
+└── / → Web UI (static/index.html)
 ```
 
 ---
 
 ## 📁 Project Structure
-
+```
 PulseWatch/
-|
-|-main.py
-|- static/
-  |- index.html
-|-README.md
-
+│
+├── main.py
+├── static/
+│ └── index.html
+└── README.md
+```
 
 ---
 
