@@ -7,7 +7,7 @@
 ## 🚀 Features
 
 - 📊 Live CPU, GPU, and RAM monitoring  
-- 📄 Reads data directly from CSV log files (e.g. HWiNFO)  
+- 📄 Reads data directly from CSV log files (HWiNFO)[https://www.hwinfo.com]
 - ⚡ Light weight  
 - 🌐 Web dashboard support  
 - 🔌 JSON API endpoint for external integrations  
