@@ -96,7 +96,7 @@ pip install fastapi uvicorn
 
 ## ▶️ How to Run
 
-1. Open **HWiNFO**
+1. Open [HWiNFO](https://www.hwinfo.com)
 2. Click **Start Logging**
 3. Set the log output location to your repository folder, for example:
 ```
